@@ -21,7 +21,7 @@ button,select,input{font-family:inherit;font-size:13px}
 .brand h1{margin:0;font-size:20px;font-weight:700}.brand p{margin:2px 0 0;font-size:12.5px;opacity:.85}
 .conn{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 .pill{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.12);font-size:12.5px;white-space:nowrap}
-.dot{width:9px;height:9px;border-radius:50%;background:#94A3B8}.dot.ok{background:#4ADE80;box-shadow:0 0 0 3px rgba(74,222,128,.25)}.dot.err{background:#F87171}.dot.load{background:#FBBF24;animation:p 1s infinite}
+.dot{width:9px;height:9px;border-radius:50%;background:#94A3B8}.dot.ok{background:#4ADE80;box-shadow:0 0 0 3px rgba(74,222,128,.25)}.dot.err{background:#F87171}.dot.load{background:#FBBF24;animation:p 1s infinite}.dot.mirror{background:#FBBF24;box-shadow:0 0 0 3px rgba(251,191,36,.25)}
 @keyframes p{50%{opacity:.35}}
 .btn{border:0;border-radius:10px;padding:8px 14px;cursor:pointer;font-weight:600;display:inline-flex;gap:7px;align-items:center}
 .btn-w{background:#fff;color:var(--navy)}.btn-w:hover{background:#E8EEF7}.btn-g{background:#fff;border:1px solid var(--line);color:var(--navy)}.btn-g:hover{background:#F1F5F9}
@@ -90,7 +90,8 @@ td{padding:9px 10px;border-bottom:1px solid #EEF2F7;vertical-align:top}tbody tr{
   </div>
   <div class="conn">
     <span class="pill" id="connPill"><span class="dot load" id="connDot"></span><span id="connTxt">جارٍ الاتصال بمصدر البيانات…</span></span>
-    <span class="pill" title="آخر تحميل ناجح للبيانات من Google Sheets"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> آخر تحديث ناجح: <b id="lastOk">—</b></span>
+    <span class="pill" title="آخر مرة حمّلت فيها اللوحة البيانات بنجاح"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> آخر تحميل ناجح للوحة: <b id="lastOk">—</b></span>
+    <span class="pill" id="syncPill" style="display:none" title="وقت آخر مزامنة ناجحة للنسخة الاحتياطية مع Google Sheets (GitHub Actions)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v6h6M20 20v-6h-6"/><path d="M20 10A8 8 0 0 0 6 6L4 10M4 14a8 8 0 0 0 14 4l2-4"/></svg> آخر مزامنة مع Google Sheets: <b id="lastSync">—</b></span>
     <label class="pill auto"><input type="checkbox" id="autoChk" checked> تحديث دوري كل 5 دقائق <span id="nextIn"></span></label>
     <button class="btn btn-w" id="refreshBtn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 4v5h-5"/></svg> Refresh Data</button>
   </div>
@@ -145,6 +146,7 @@ const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT_IarndYA1yCE6
 const MIRROR_URL = "data/risk-register.csv"; // نسخة تُزامَن آليًا من الرابط نفسه عبر GitHub Actions (احتياط عند تعذّر CORS)
 const SYNC_URL = "data/sync.json";
 const AUTO_MS = 5 * 60 * 1000;
+const STALE_MIN = 90; // تُعدّ النسخة المتزامنة قديمة إذا لم يُتحقق منها خلال 90 دقيقة
 const TH = { mod: 5, high: 10, crit: 17 };
 const LV = [
   { k: "crit", ar: "حرج", en: "Critical", color: "#E5484D", cls: "b-crit" },
@@ -217,15 +219,26 @@ async function load(manual) {
   let rows;
   try { rows = parse(text); } catch (e) { fail(e.message); return; }
   if (!rows.length) { fail("تم الاتصال بالمصدر لكنه لا يحتوي أي خطر (صفوف بدون Risk ID)."); return; }
-  if (src.startsWith("نسخة")) { try { const j = JSON.parse(await fetchText(SYNC_URL + "?_ts=" + Date.now())); if (j.synced_at) src += " (آخر مزامنة: " + fmtTime(new Date(j.synced_at)) + ")"; } catch (e) { } }
-  META.directErr = errs.join(" | ");
+  const mirror = src.startsWith("نسخة");
+  let sync = null, stale = false, staleMsg = "";
+  if (mirror) {
+    try { sync = JSON.parse(await fetchText(SYNC_URL + "?_ts=" + Date.now())); } catch (e) { sync = null; }
+    const chk = sync && (sync.checked_at || sync.synced_at) ? new Date(sync.checked_at || sync.synced_at) : null;
+    if (!chk || isNaN(chk)) { stale = true; staleMsg = "تعذّر التأكد من وقت آخر مزامنة للنسخة الاحتياطية؛ قد لا تكون البيانات محدّثة."; }
+    else if ((Date.now() - chk) / 60000 > STALE_MIN) { stale = true; staleMsg = "آخر تحقق ناجح من Google Sheets كان قبل " + Math.round((Date.now() - chk) / 60000) + " دقيقة؛ قد لا تكون البيانات محدّثة."; }
+    $("syncPill").style.display = ""; $("lastSync").textContent = chk && !isNaN(chk) ? fmtTime(chk) : "غير معروف";
+  } else { $("syncPill").style.display = "none"; }
+  META.directErr = mirror ? errs.join(" | ") : "";
+  META.sync = sync; META.mode = mirror ? "mirror" : "direct";
   const h = await hashText(text);
   META.prevHash = META.hash; META.hash = h; META.lastOk = new Date(); META.source = src; RAW = rows;
-  setConn("ok", "متصل — " + src);
+  setConn(mirror ? "mirror" : "ok", mirror ? "متصل عبر نسخة متزامنة (ليست مباشرة)" : "متصل مباشرة بـ Google Sheets");
   $("lastOk").textContent = fmtTime(META.lastOk);
   const changed = META.prevHash && META.prevHash !== h;
-  if (manual || changed) banner(changed ? "info" : "info", changed ? "تم رصد تغييرات في المصدر وتحديث جميع المؤشرات والرسوم (" + fmtTime(META.lastOk) + ")." : "تم التحديث — لا توجد تغييرات في المصدر منذ آخر تحميل. (قد يستغرق Google بضع دقائق لنشر التعديلات الجديدة.)");
+  if (stale) banner("warn", "⚠ " + staleMsg + " تُعرض النسخة المتزامنة من الرابط نفسه، وليست بيانات مباشرة.");
+  else if (manual || changed) banner("info", changed ? "تم رصد تغييرات في المصدر وتحديث جميع المؤشرات والرسوم (" + fmtTime(META.lastOk) + ")." : "تم التحديث — لا توجد تغييرات منذ آخر تحميل. (قد يستغرق Google بضع دقائق لنشر التعديلات" + (mirror ? "، وتُزامن النسخة الاحتياطية كل 10 دقائق تقريبًا" : "") + ".)");
   else banner(null);
+  pruneFilters();
   buildFilterOptions(); render(); schedule();
 }
 function fail(msg) {
@@ -240,6 +253,11 @@ function banner(type, msg) { const b = $("banner"); b.className = "banner" + (ty
 function schedule() { clearTimeout(timer); if ($("autoChk").checked) { nextAt = Date.now() + AUTO_MS; timer = setTimeout(() => load(false), AUTO_MS); } else nextAt = 0; }
 setInterval(() => { $("nextIn").textContent = nextAt ? "(" + Math.max(0, Math.ceil((nextAt - Date.now()) / 60000)) + " د)" : ""; }, 5000);
 
+function pruneFilters() {
+  const has = (k, v) => RAW.some(r => r[k] === v);
+  if (F.cat && !has("cat", F.cat)) F.cat = ""; if (F.st && !has("status", F.st)) F.st = ""; if (F.own && !has("owner", F.own)) F.own = "";
+  if (F.lvl && !RAW.some(r => r.level === F.lvl)) F.lvl = "";
+}
 function uniq(a) { return [...new Set(a.filter(Boolean))].sort((x, y) => x.localeCompare(y, "ar")); }
 function opts(sel, vals, label, cur) {
   sel.innerHTML = `<option value="">الكل (${label})</option>` + vals.map(v => `<option value="${esc(v.v ?? v)}"${(v.v ?? v) === cur ? " selected" : ""}>${esc(v.t ?? v)}</option>`).join("");
@@ -359,13 +377,18 @@ function renderValidation() {
   const badPI = RAW.filter(r => !(r.p >= 1 && r.p <= 5 && r.i >= 1 && r.i <= 5));
   const badScore = RAW.filter(r => !isNaN(r.srcScore) && r.srcScore !== r.score);
   const badLvl = RAW.filter(r => r.calcLevel && levelKey(r.levelTxt) && levelKey(r.levelTxt) !== r.calcLevel);
+  const noLvl = RAW.filter(r => !levelKey(r.levelTxt));
+  const noBasic = RAW.filter(r => !r.title || !r.cat || !r.owner || !r.status);
   const L = (ok, t) => `<li class="${ok ? "ok" : "bad"}">${ok ? "✔" : "✖"} ${t}</li>`;
   $("val").innerHTML = [
     L(true, `مصدر البيانات: ${esc(META.source)} — عدد المخاطر المقروءة: <b>${RAW.length}</b> — بصمة البيانات: <code>${META.hash}</code>`),
     META.directErr ? `<li class='info'>ℹ تعذّر الجلب المباشر من Google (${esc(META.directErr)})، فاستُخدمت النسخة المتزامنة آليًا من الرابط نفسه.</li>` : `<li class='ok'>✔ الجلب المباشر من رابط Google Sheets المنشور يعمل (CORS مسموح).</li>`,
+    META.mode === "mirror" ? `<li class='info'>ℹ النسخة المتزامنة: آخر تغيير في البيانات ${META.sync && META.sync.synced_at ? fmtTime(new Date(META.sync.synced_at)) : "غير معروف"} — آخر تحقق ناجح ${META.sync && META.sync.checked_at ? fmtTime(new Date(META.sync.checked_at)) : "غير معروف"}</li>` : "",
     L(!dup.length, dup.length ? "أرقام مخاطر مكررة: " + esc(uniq(dup).join("، ")) : "لا توجد أرقام مخاطر مكررة"),
     L(!badPI.length, badPI.length ? "قيم احتمالية/تأثير خارج 1–5: " + esc(badPI.map(r => r.id).join("، ")) : "جميع قيم الاحتمالية والتأثير صحيحة (1–5)"),
     L(!badScore.length, badScore.length ? "درجة المصدر لا تساوي P×I في: " + esc(badScore.map(r => r.id).join("، ")) : "درجة الخطر في المصدر = الاحتمالية × التأثير لجميع المخاطر (أُعيد احتسابها في اللوحة)"),
+    L(!noLvl.length, noLvl.length ? "تصنيف غير مسجّل في المصدر (احتُسب من الدرجة) في: " + esc(noLvl.map(r => r.id).join("، ")) : "جميع المخاطر لها تصنيف مسجّل في المصدر"),
+    L(!noBasic.length, noBasic.length ? "بيانات أساسية ناقصة (العنوان/الفئة/المالك/الحالة) في: " + esc(noBasic.map(r => r.id).join("، ")) : "البيانات الأساسية مكتملة لجميع المخاطر"),
     L(!badLvl.length, badLvl.length ? "تصنيف المصدر يخالف الحدود المعتمدة في: " + esc(badLvl.map(r => r.id).join("، ")) : "تصنيف كل خطر مطابق للحدود: منخفض 1–4، متوسط 5–9، مرتفع 10–16، حرج 17–25")].join("");
 }
 function openDrawer(r) {

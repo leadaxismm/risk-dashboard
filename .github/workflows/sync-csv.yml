@@ -1,9 +1,12 @@
 name: Sync Google Sheets CSV (read-only mirror)
+# ينسخ ورقة «Risk Register» المنشورة (قراءة فقط) إلى data/risk-register.csv كل 10 دقائق تقريبًا.
+# يُستخدم احتياطيًا فقط عندما يمنع المتصفح القراءة المباشرة من Google (CORS).
 on:
   schedule:
     - cron: "*/10 * * * *"
   workflow_dispatch:
   push:
+    branches: [main]
     paths: [".github/workflows/sync-csv.yml"]
 permissions:
   contents: write
@@ -19,17 +22,31 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsSL --retry 3 -o /tmp/new.csv "$SRC&_ts=$(date +%s)"
-          grep -q "Risk ID" /tmp/new.csv || { echo "Source did not return the Risk Register CSV"; exit 1; }
+          grep -q "Risk ID" /tmp/new.csv || { echo "::error::Source did not return the Risk Register CSV"; exit 1; }
           mkdir -p data
-          if [ -f data/risk-register.csv ] && cmp -s /tmp/new.csv data/risk-register.csv; then echo "No change"; echo "CHANGED=0" >> $GITHUB_ENV; else
-            cp /tmp/new.csv data/risk-register.csv
-            printf '{"synced_at":"%s","sha256":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(sha256sum data/risk-register.csv | cut -c1-16)" > data/sync.json
-            echo "CHANGED=1" >> $GITHUB_ENV; fi
-      - name: Commit if changed
-        if: env.CHANGED == '1'
+          NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          SHA=$(sha256sum /tmp/new.csv | cut -c1-16)
+          PREV_SYNC=$(python3 -c "import json;print(json.load(open('data/sync.json')).get('synced_at',''))" 2>/dev/null || true)
+          PREV_CHECK=$(python3 -c "import json;print(json.load(open('data/sync.json')).get('checked_at',''))" 2>/dev/null || true)
+          if [ -f data/risk-register.csv ] && cmp -s /tmp/new.csv data/risk-register.csv; then
+            CHANGED=0; SYNCED="$PREV_SYNC"
+          else
+            CHANGED=1; SYNCED="$NOW"; cp /tmp/new.csv data/risk-register.csv
+          fi
+          # نبضة كل 60 دقيقة لتسجيل آخر تحقق ناجح حتى دون تغيير البيانات
+          AGE=999999
+          if [ -n "$PREV_CHECK" ]; then AGE=$(( ( $(date -u +%s) - $(date -u -d "$PREV_CHECK" +%s) ) / 60 )); fi
+          if [ "$CHANGED" = 1 ] || [ "$AGE" -ge 60 ]; then
+            printf '{"source":"Google Sheets published CSV (Risk Register)","synced_at":"%s","checked_at":"%s","sha256":"%s","rows_with_id":%s}\n' \
+              "$SYNCED" "$NOW" "$SHA" "$(grep -cE '^"?R[0-9]+' data/risk-register.csv || true)" > data/sync.json
+            echo "COMMIT=1" >> "$GITHUB_ENV"
+          fi
+          echo "changed=$CHANGED age_min=$AGE"
+      - name: Commit
+        if: env.COMMIT == '1'
         run: |
           git config user.name "risk-dashboard-sync"
           git config user.email "actions@users.noreply.github.com"
           git add data/
-          git commit -m "Sync risk register CSV from Google Sheets"
+          git commit -m "Sync risk register CSV from Google Sheets [$(date -u +%H:%M)Z]"
           git push
