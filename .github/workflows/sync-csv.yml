@@ -1,0 +1,35 @@
+name: Sync Google Sheets CSV (read-only mirror)
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+  push:
+    paths: [".github/workflows/sync-csv.yml"]
+permissions:
+  contents: write
+concurrency: { group: sync-csv, cancel-in-progress: false }
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch published CSV
+        env:
+          SRC: "https://docs.google.com/spreadsheets/d/e/2PACX-1vT_IarndYA1yCE6H8I_KkzGDoGZAY6hlirno8xFTnh-Wk7zY0aj9we3Hqmpt20BHA/pub?output=csv"
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 -o /tmp/new.csv "$SRC&_ts=$(date +%s)"
+          grep -q "Risk ID" /tmp/new.csv || { echo "Source did not return the Risk Register CSV"; exit 1; }
+          mkdir -p data
+          if [ -f data/risk-register.csv ] && cmp -s /tmp/new.csv data/risk-register.csv; then echo "No change"; echo "CHANGED=0" >> $GITHUB_ENV; else
+            cp /tmp/new.csv data/risk-register.csv
+            printf '{"synced_at":"%s","sha256":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(sha256sum data/risk-register.csv | cut -c1-16)" > data/sync.json
+            echo "CHANGED=1" >> $GITHUB_ENV; fi
+      - name: Commit if changed
+        if: env.CHANGED == '1'
+        run: |
+          git config user.name "risk-dashboard-sync"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/
+          git commit -m "Sync risk register CSV from Google Sheets"
+          git push

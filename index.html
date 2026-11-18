@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>لوحة متابعة المخاطر الرقمية – Risk Management Dashboard</title>
+<meta name="description" content="لوحة متابعة المخاطر الرقمية لمشروع تعزيز سلامة المرضى واستمرارية الخدمات الصحية بمستشفى الولادة والأطفال بحفر الباطن">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.5.0/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{--navy:#14284B;--navy2:#1F3864;--teal:#1F6FB2;--bg:#F3F6FA;--card:#FFFFFF;--line:#E2E8F0;--muted:#64748B;--txt:#0F172A;
+--crit:#E5484D;--high:#F5922F;--mod:#F2C94C;--low:#3FA66B;--r:14px;--sh:0 1px 2px rgba(15,23,42,.06),0 4px 14px rgba(15,23,42,.06)}
+*{box-sizing:border-box}html,body{margin:0}body{font-family:"IBM Plex Sans Arabic",Tahoma,Arial,sans-serif;background:var(--bg);color:var(--txt);font-size:14px;line-height:1.55}
+button,select,input{font-family:inherit;font-size:13px}
+.top{background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;padding:18px 24px 16px}
+.top-in{max-width:1440px;margin:0 auto;display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between}
+.brand{display:flex;gap:14px;align-items:center}.logo{width:46px;height:46px;border-radius:12px;background:rgba(255,255,255,.12);display:grid;place-items:center}
+.brand h1{margin:0;font-size:20px;font-weight:700}.brand p{margin:2px 0 0;font-size:12.5px;opacity:.85}
+.conn{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.pill{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.12);font-size:12.5px;white-space:nowrap}
+.dot{width:9px;height:9px;border-radius:50%;background:#94A3B8}.dot.ok{background:#4ADE80;box-shadow:0 0 0 3px rgba(74,222,128,.25)}.dot.err{background:#F87171}.dot.load{background:#FBBF24;animation:p 1s infinite}
+@keyframes p{50%{opacity:.35}}
+.btn{border:0;border-radius:10px;padding:8px 14px;cursor:pointer;font-weight:600;display:inline-flex;gap:7px;align-items:center}
+.btn-w{background:#fff;color:var(--navy)}.btn-w:hover{background:#E8EEF7}.btn-g{background:#fff;border:1px solid var(--line);color:var(--navy)}.btn-g:hover{background:#F1F5F9}
+.btn:disabled{opacity:.6;cursor:wait}
+.wrap{max-width:1440px;margin:0 auto;padding:18px 24px 40px}
+.banner{display:none;border-radius:12px;padding:10px 14px;margin-bottom:14px;font-size:13px;border:1px solid}
+.banner.err{display:block;background:#FEF2F2;border-color:#FECACA;color:#991B1B}.banner.warn{display:block;background:#FFFBEB;border-color:#FDE68A;color:#92400E}.banner.info{display:block;background:#EFF6FF;border-color:#BFDBFE;color:#1E3A8A}
+.filters{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:14px 16px;display:grid;grid-template-columns:repeat(4,minmax(150px,1fr)) minmax(200px,1.4fr) auto;gap:12px;align-items:end;margin-bottom:16px}
+.f label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:600}
+.f select,.f input{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--txt)}
+.f select:focus,.f input:focus{outline:2px solid #BFDBFE;border-color:var(--teal)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:-6px 0 14px}.chip{background:#E0ECFF;color:#1E3A8A;border-radius:999px;padding:4px 10px;font-size:12px;display:inline-flex;gap:6px;align-items:center}
+.chip button{border:0;background:none;cursor:pointer;color:#1E3A8A;font-size:14px;line-height:1;padding:0}
+.kpis{display:grid;grid-template-columns:repeat(8,1fr);gap:12px;margin-bottom:16px}
+.kpi{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:14px;position:relative;overflow:hidden;cursor:default}
+.kpi::before{content:"";position:absolute;inset:0 0 auto 0;height:4px;background:var(--c,var(--teal))}
+.kpi .h{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:12px;font-weight:600}
+.kpi .ic{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:color-mix(in srgb,var(--c) 14%,white);color:var(--c)}
+.kpi .v{font-size:30px;font-weight:700;margin-top:6px;color:var(--c);line-height:1.1}.kpi .e{font-size:11px;color:var(--muted)}
+.kpi.click{cursor:pointer}.kpi.click:hover{outline:2px solid color-mix(in srgb,var(--c) 40%,white)}
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}
+.card{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:14px 16px;min-width:0}
+.card h3{margin:0 0 2px;font-size:15px}.card .sub{margin:0 0 8px;color:var(--muted);font-size:12px}
+.c6{grid-column:span 6}.c5{grid-column:span 5}.c7{grid-column:span 7}.c12{grid-column:span 12}
+.chart{width:100%;height:330px}
+.hm{display:grid;grid-template-columns:64px repeat(5,1fr);gap:6px;direction:rtl}
+.hm .ax{display:grid;place-items:center;font-size:12px;font-weight:700;color:var(--navy);background:#EEF3FA;border-radius:8px;padding:4px;text-align:center}
+.hm .cell{border-radius:10px;min-height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:transform .12s,box-shadow .12s;border:2px solid transparent;color:#111}
+.hm .cell:hover{transform:translateY(-2px);box-shadow:0 6px 14px rgba(0,0,0,.12)}.hm .cell.sel{border-color:var(--navy);box-shadow:0 0 0 3px rgba(20,40,75,.25)}
+.hm .cell .n{font-size:22px;font-weight:700;line-height:1}.hm .cell .s{font-size:10.5px;opacity:.75}.hm .cell.zero .n{opacity:.35}
+.hm-cap{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-top:6px;direction:rtl}
+.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;margin-top:8px}.legend span{display:inline-flex;gap:6px;align-items:center}.legend i{width:14px;height:14px;border-radius:4px;display:inline-block}
+.tbar{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center;margin-bottom:10px}
+.tbl-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px;max-height:520px}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:900px}
+th{position:sticky;top:0;background:#F1F5F9;color:#334155;text-align:right;font-weight:700;padding:9px 10px;border-bottom:1px solid var(--line);cursor:pointer;white-space:nowrap;user-select:none}
+th .ar{opacity:.4;font-size:10px}th.on .ar{opacity:1}
+td{padding:9px 10px;border-bottom:1px solid #EEF2F7;vertical-align:top}tbody tr{cursor:pointer}tbody tr:hover{background:#F8FAFC}
+.badge{display:inline-block;padding:2px 9px;border-radius:999px;font-weight:700;font-size:12px;white-space:nowrap}
+.b-crit{background:#FDE2E2;color:#9B1C1C}.b-high{background:#FFE8D1;color:#9A3412}.b-mod{background:#FFF4C2;color:#854D0E}.b-low{background:#DCF5E5;color:#166534}
+.st{font-size:12px;padding:2px 8px;border-radius:8px;background:#EEF2F7;white-space:nowrap}.st.closed{background:#E5E7EB;color:#6B7280}
+.score{font-weight:700;display:inline-grid;place-items:center;min-width:30px;height:26px;border-radius:8px}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+.drawer-bg{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;z-index:50}.drawer-bg.on{display:block}
+.drawer{position:fixed;top:0;bottom:0;left:0;width:min(520px,100%);background:#fff;z-index:51;transform:translateX(-105%);transition:transform .22s;box-shadow:0 0 30px rgba(0,0,0,.2);display:flex;flex-direction:column}
+.drawer.on{transform:none}.drawer .dh{background:var(--navy);color:#fff;padding:16px 18px;display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.drawer .dh h4{margin:0;font-size:16px}.drawer .db{padding:16px 18px;overflow:auto}
+.kv{display:grid;grid-template-columns:130px 1fr;gap:8px 12px;font-size:13px;margin-bottom:12px}.kv b{color:var(--muted);font-weight:600}
+.blk{margin:12px 0}.blk h5{margin:0 0 4px;font-size:13px;color:var(--navy)}.blk p{margin:0;font-size:13px;white-space:pre-wrap}
+.x{background:rgba(255,255,255,.15);border:0;color:#fff;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:18px}
+.foot{margin-top:18px;color:var(--muted);font-size:12px;display:flex;flex-wrap:wrap;gap:8px 20px;justify-content:space-between}
+.val{font-size:12.5px}.val li{margin:3px 0}.ok{color:#166534}.bad{color:#B91C1C}.val li.info{color:#92400E}
+.sk{background:linear-gradient(90deg,#EEF2F7,#F8FAFC,#EEF2F7);background-size:200% 100%;animation:sk 1.2s infinite;border-radius:8px;color:transparent!important}
+@keyframes sk{to{background-position:-200% 0}}
+.auto{display:inline-flex;gap:6px;align-items:center;font-size:12.5px}
+@media (max-width:1200px){.kpis{grid-template-columns:repeat(4,1fr)}.filters{grid-template-columns:repeat(2,1fr)}.c6,.c5,.c7{grid-column:span 12}}
+@media (max-width:640px){.top{padding:14px}.wrap{padding:12px}.kpis{grid-template-columns:repeat(2,1fr)}.kpi .v{font-size:24px}.filters{grid-template-columns:1fr}.brand h1{font-size:16px}.chart{height:290px}.hm{grid-template-columns:44px repeat(5,1fr);gap:4px}.hm .cell{min-height:46px}.hm .cell .n{font-size:17px}.kv{grid-template-columns:100px 1fr}}
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in">
+  <div class="brand">
+    <div class="logo"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/><path d="M12 8v5M9.5 10.5h5"/></svg></div>
+    <div><h1>لوحة متابعة المخاطر الرقمية — Risk Management Dashboard</h1>
+    <p>مشروع تعزيز سلامة المرضى واستمرارية الخدمات الصحية | مستشفى الولادة والأطفال بحفر الباطن</p></div>
+  </div>
+  <div class="conn">
+    <span class="pill" id="connPill"><span class="dot load" id="connDot"></span><span id="connTxt">جارٍ الاتصال بمصدر البيانات…</span></span>
+    <span class="pill" title="آخر تحميل ناجح للبيانات من Google Sheets"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> آخر تحديث ناجح: <b id="lastOk">—</b></span>
+    <label class="pill auto"><input type="checkbox" id="autoChk" checked> تحديث دوري كل 5 دقائق <span id="nextIn"></span></label>
+    <button class="btn btn-w" id="refreshBtn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 4v5h-5"/></svg> Refresh Data</button>
+  </div>
+</div></header>
+
+<main class="wrap">
+  <div class="banner" id="banner"></div>
+
+  <section class="filters" aria-label="الفلاتر">
+    <div class="f"><label for="fCat">فئة الخطر (Category)</label><select id="fCat"></select></div>
+    <div class="f"><label for="fLvl">مستوى الخطورة (Level)</label><select id="fLvl"></select></div>
+    <div class="f"><label for="fSt">حالة الخطر (Status)</label><select id="fSt"></select></div>
+    <div class="f"><label for="fOwn">مالك الخطر (Owner)</label><select id="fOwn"></select></div>
+    <div class="f"><label for="fQ">بحث بالرقم أو الاسم</label><input id="fQ" type="search" placeholder="مثال: R03 أو العدوى"></div>
+    <div class="f"><button class="btn btn-g" id="resetBtn" style="width:100%;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/></svg> إعادة ضبط الفلاتر</button></div>
+  </section>
+  <div class="chips" id="chips"></div>
+
+  <section class="kpis" id="kpis"></section>
+
+  <section class="grid">
+    <div class="card c5"><h3>توزيع المخاطر حسب مستوى الخطورة</h3><p class="sub">Risk Level Distribution — اضغط على الشريحة للتصفية</p><div class="chart" id="pie"></div></div>
+    <div class="card c7"><h3>عدد المخاطر حسب الفئة</h3><p class="sub">Risks by Category — اضغط على العمود لعرض مخاطر الفئة</p><div class="chart" id="bar"></div></div>
+    <div class="card c5"><h3>مصفوفة المخاطر 5×5 (Risk Heat Map)</h3><p class="sub">Risk Score = Probability × Impact — اضغط على الخلية لعرض مخاطرها</p>
+      <div id="hm" class="hm"></div>
+      <div class="hm-cap"><span>المحور الأفقي: الاحتمالية (Probability) — تزداد من اليمين إلى اليسار</span><span>المحور الرأسي: التأثير (Impact) — يزداد إلى الأعلى</span></div>
+      <div class="legend"><span><i style="background:var(--crit)"></i>حرج 17–25</span><span><i style="background:var(--high)"></i>مرتفع 10–16</span><span><i style="background:var(--mod)"></i>متوسط 5–9</span><span><i style="background:var(--low)"></i>منخفض 1–4</span></div>
+    </div>
+    <div class="card c7"><h3>مخطط انتشار المخاطر (Scatter Plot)</h3><p class="sub">الاحتمالية × التأثير — مرّر المؤشر لعرض اسم الخطر ودرجته وتصنيفه، واضغط لعرض التفاصيل</p><div class="chart" id="sc" style="height:390px"></div></div>
+
+    <div class="card c12">
+      <div class="tbar"><div><h3>سجل المخاطر التفاعلي (Risk Register)</h3><p class="sub" id="tblSub">—</p></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-g" id="xlsxBtn">⬇ تصدير Excel</button><button class="btn btn-g" id="csvBtn">⬇ تصدير CSV</button></div></div>
+      <div class="tbl-wrap"><table><thead><tr id="thead"></tr></thead><tbody id="tbody"></tbody></table></div>
+    </div>
+
+    <div class="card c12"><h3>التحقق من سلامة البيانات (Data Validation)</h3><p class="sub">فحوص آلية تُنفذ بعد كل تحميل على البيانات الفعلية المقروءة من الرابط</p><ul class="val" id="val"></ul></div>
+  </section>
+
+  <div class="foot">
+    <span>مصدر البيانات: Google Sheets منشور (CSV، قراءة فقط) — <a href="https://docs.google.com/spreadsheets/d/e/2PACX-1vT_IarndYA1yCE6H8I_KkzGDoGZAY6hlirno8xFTnh-Wk7zY0aj9we3Hqmpt20BHA/pubhtml" target="_blank" rel="noopener">عرض المصدر</a>. تنبيه: يُحدّث Google النسخة المنشورة عادةً خلال دقائق من التعديل، لذا قد لا يظهر التغيير فورًا.</span>
+    <span>البيانات افتراضية لأغراض أكاديمية · حدود التصنيف أكاديمية: منخفض 1–4، متوسط 5–9، مرتفع 10–16، حرج 17–25</span>
+  </div>
+</main>
+
+<div class="drawer-bg" id="dBg"></div>
+<aside class="drawer" id="drawer" aria-hidden="true"><div class="dh"><div><div id="dId" style="opacity:.8;font-size:12px"></div><h4 id="dTitle"></h4></div><button class="x" id="dClose" aria-label="إغلاق">×</button></div><div class="db" id="dBody"></div></aside>
+
+<script>
+"use strict";
+const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT_IarndYA1yCE6H8I_KkzGDoGZAY6hlirno8xFTnh-Wk7zY0aj9we3Hqmpt20BHA/pub?output=csv";
+const MIRROR_URL = "data/risk-register.csv"; // نسخة تُزامَن آليًا من الرابط نفسه عبر GitHub Actions (احتياط عند تعذّر CORS)
+const SYNC_URL = "data/sync.json";
+const AUTO_MS = 5 * 60 * 1000;
+const TH = { mod: 5, high: 10, crit: 17 };
+const LV = [
+  { k: "crit", ar: "حرج", en: "Critical", color: "#E5484D", cls: "b-crit" },
+  { k: "high", ar: "مرتفع", en: "High", color: "#F5922F", cls: "b-high" },
+  { k: "mod", ar: "متوسط", en: "Moderate", color: "#F2C94C", cls: "b-mod" },
+  { k: "low", ar: "منخفض", en: "Low", color: "#3FA66B", cls: "b-low" }];
+const LVK = Object.fromEntries(LV.map(l => [l.k, l]));
+const levelFromScore = s => s >= TH.crit ? "crit" : s >= TH.high ? "high" : s >= TH.mod ? "mod" : "low";
+const levelKey = t => { t = String(t || "").toLowerCase(); return /critical|حرج/.test(t) ? "crit" : /high|مرتفع/.test(t) ? "high" : /moderate|medium|متوسط/.test(t) ? "mod" : /low|منخفض/.test(t) ? "low" : null; };
+const isClosed = s => /مغلق|closed/i.test(String(s || ""));
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const $ = id => document.getElementById(id);
+
+// خريطة الأعمدة: تُحدد من صف العناوين الفعلي (يحتوي "Risk ID")
+const COLS = [
+  ["id", /risk id|رقم الخطر/i], ["title", /risk title|عنوان الخطر/i], ["desc", /risk description|وصف الخطر/i], ["cat", /category|فئة الخطر/i],
+  ["p", /probability|الاحتمالية/i], ["i", /impact|التأثير/i], ["score", /risk score|درجة الخطر/i], ["level", /risk level|تصنيف الخطر/i],
+  ["owner", /risk owner|مالك الخطر/i], ["date", /identification date|تاريخ الرصد/i], ["status", /risk status|^الحالة/i], ["why", /rationale|مبرر/i],
+  ["ctrl", /existing controls|الضوابط/i], ["strat", /response strategy|استراتيجية/i], ["plan", /response plan|خطة الاستجابة/i],
+  ["review", /next review|المراجعة القادمة/i], ["prio", /priority|أولوية/i]];
+
+let RAW = [], META = { hash: null, prevHash: null, lastOk: null, source: null, colsFound: [] };
+const F = { cat: "", lvl: "", st: "", own: "", q: "", cell: null };
+let sortK = "score", sortDir = -1, timer = null, nextAt = 0;
+
+function parse(text) {
+  const rows = Papa.parse(text, { skipEmptyLines: false }).data;
+  const hi = rows.findIndex(r => r.some(c => /risk id/i.test(c)));
+  if (hi < 0) throw new Error("لم يُعثر على صف العناوين (Risk ID) في ملف CSV — تحقق من أن الورقة المنشورة هي «Risk Register».");
+  const head = rows[hi]; const idx = {};
+  COLS.forEach(([k, re]) => { const j = head.findIndex(h => re.test(String(h).replace(/\s+/g, " "))); if (j >= 0 && !(k in idx)) idx[k] = j; });
+  // ترتيب: "Risk Score" يجب ألا يطابق عمود آخر؛ "Risk Status" قبل غيره
+  const miss = ["id", "title", "cat", "p", "i", "level", "owner", "status"].filter(k => !(k in idx));
+  if (miss.length) throw new Error("أعمدة أساسية مفقودة في المصدر: " + miss.join("، "));
+  META.colsFound = Object.keys(idx);
+  const out = [];
+  for (let r = hi + 1; r < rows.length; r++) {
+    const row = rows[r]; const id = String(row[idx.id] || "").trim();
+    if (!id) continue;
+    const g = k => k in idx ? String(row[idx[k]] ?? "").trim() : "";
+    const p = Number(g("p")), i = Number(g("i"));
+    const srcScore = g("score") === "" ? NaN : Number(g("score"));
+    const calc = (p >= 1 && i >= 1) ? p * i : NaN;
+    const lk = levelKey(g("level"));
+    out.push({ id, title: g("title"), desc: g("desc"), cat: g("cat"), p, i, srcScore, score: calc, level: lk || (isNaN(calc) ? null : levelFromScore(calc)),
+      levelTxt: g("level"), calcLevel: isNaN(calc) ? null : levelFromScore(calc), owner: g("owner"), date: g("date"), status: g("status"),
+      why: g("why"), ctrl: g("ctrl"), strat: g("strat"), plan: g("plan"), review: g("review"), prio: g("prio") });
+  }
+  return out;
+}
+async function hashText(t) {
+  try { const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)); return [...new Uint8Array(b)].slice(0, 8).map(x => x.toString(16).padStart(2, "0")).join(""); }
+  catch (e) { let h = 0; for (let k = 0; k < t.length; k++) h = (h * 31 + t.charCodeAt(k)) | 0; return String(h); }
+}
+async function fetchText(url) {
+  const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 15000);
+  try { const r = await fetch(url, { cache: "no-store", signal: ctl.signal }); if (!r.ok) throw new Error("HTTP " + r.status); return await r.text(); }
+  finally { clearTimeout(to); }
+}
+async function load(manual) {
+  const btn = $("refreshBtn"); btn.disabled = true; setConn("load", "جارٍ جلب البيانات من Google Sheets…");
+  let text = null, src = null, errs = [];
+  // 1) جلب مباشر من الرابط المنشور (CORS)  2) عبر وسيط الخادم للقراءة فقط عند تعذّر الأول
+  for (const [u, name] of [[CSV_URL + "&_ts=" + Date.now(), "مباشر من Google Sheets"], [MIRROR_URL + "?_ts=" + Date.now(), "نسخة متزامنة آليًا من Google Sheets"]]) {
+    try { text = await fetchText(u); if (/<html/i.test(text.slice(0, 200))) throw new Error("المصدر أعاد صفحة HTML بدل CSV (تحقق من إعداد النشر)"); src = name; break; }
+    catch (e) { errs.push(name + ": " + (e.name === "AbortError" ? "انتهت مهلة الاتصال" : e.message)); }
+  }
+  btn.disabled = false;
+  if (!text) { fail("تعذّر تحميل البيانات من المصدر. " + errs.join(" | ")); return; }
+  let rows;
+  try { rows = parse(text); } catch (e) { fail(e.message); return; }
+  if (!rows.length) { fail("تم الاتصال بالمصدر لكنه لا يحتوي أي خطر (صفوف بدون Risk ID)."); return; }
+  if (src.startsWith("نسخة")) { try { const j = JSON.parse(await fetchText(SYNC_URL + "?_ts=" + Date.now())); if (j.synced_at) src += " (آخر مزامنة: " + fmtTime(new Date(j.synced_at)) + ")"; } catch (e) { } }
+  META.directErr = errs.join(" | ");
+  const h = await hashText(text);
+  META.prevHash = META.hash; META.hash = h; META.lastOk = new Date(); META.source = src; RAW = rows;
+  setConn("ok", "متصل — " + src);
+  $("lastOk").textContent = fmtTime(META.lastOk);
+  const changed = META.prevHash && META.prevHash !== h;
+  if (manual || changed) banner(changed ? "info" : "info", changed ? "تم رصد تغييرات في المصدر وتحديث جميع المؤشرات والرسوم (" + fmtTime(META.lastOk) + ")." : "تم التحديث — لا توجد تغييرات في المصدر منذ آخر تحميل. (قد يستغرق Google بضع دقائق لنشر التعديلات الجديدة.)");
+  else banner(null);
+  buildFilterOptions(); render(); schedule();
+}
+function fail(msg) {
+  setConn("err", "تعذّر الاتصال بالمصدر");
+  if (META.lastOk) banner("warn", "⚠ " + msg + " — تُعرض آخر بيانات تم تحميلها بنجاح بتاريخ " + fmtTime(META.lastOk) + "، وقد لا تكون محدّثة.");
+  else { banner("err", "✖ " + msg + " لا توجد بيانات لعرضها."); RAW = []; render(); }
+  schedule();
+}
+const fmtTime = d => d.toLocaleString("ar-SA-u-nu-latn", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true, timeZone: "Asia/Riyadh" });
+function setConn(st, txt) { $("connDot").className = "dot " + st; $("connTxt").textContent = txt; }
+function banner(type, msg) { const b = $("banner"); b.className = "banner" + (type ? " " + type : ""); b.textContent = msg || ""; }
+function schedule() { clearTimeout(timer); if ($("autoChk").checked) { nextAt = Date.now() + AUTO_MS; timer = setTimeout(() => load(false), AUTO_MS); } else nextAt = 0; }
+setInterval(() => { $("nextIn").textContent = nextAt ? "(" + Math.max(0, Math.ceil((nextAt - Date.now()) / 60000)) + " د)" : ""; }, 5000);
+
+function uniq(a) { return [...new Set(a.filter(Boolean))].sort((x, y) => x.localeCompare(y, "ar")); }
+function opts(sel, vals, label, cur) {
+  sel.innerHTML = `<option value="">الكل (${label})</option>` + vals.map(v => `<option value="${esc(v.v ?? v)}"${(v.v ?? v) === cur ? " selected" : ""}>${esc(v.t ?? v)}</option>`).join("");
+}
+function buildFilterOptions() {
+  opts($("fCat"), uniq(RAW.map(r => r.cat)), "جميع الفئات", F.cat);
+  opts($("fLvl"), LV.map(l => ({ v: l.k, t: l.ar + " (" + l.en + ")" })), "جميع المستويات", F.lvl);
+  opts($("fSt"), uniq(RAW.map(r => r.status)), "جميع الحالات", F.st);
+  opts($("fOwn"), uniq(RAW.map(r => r.owner)), "جميع المالكين", F.own);
+}
+function filtered(except) {
+  const q = F.q.trim().toLowerCase();
+  return RAW.filter(r => (except === "cat" || !F.cat || r.cat === F.cat) && (except === "lvl" || !F.lvl || r.level === F.lvl) &&
+    (!F.st || r.status === F.st) && (!F.own || r.owner === F.own) && (!F.cell || (r.p === F.cell[0] && r.i === F.cell[1])) &&
+    (!q || r.id.toLowerCase().includes(q) || r.title.toLowerCase().includes(q) || r.desc.toLowerCase().includes(q)));
+}
+const ICON = {
+  total: '<path d="M4 6h16M4 12h16M4 18h10"/>', crit: '<path d="M12 3l9 16H3L12 3z"/><path d="M12 10v4M12 17h.01"/>', high: '<path d="M4 17l6-6 4 4 6-7"/><path d="M14 8h6v6"/>',
+  mod: '<circle cx="12" cy="12" r="8"/><path d="M8 12h8"/>', low: '<path d="M5 12l4 4 10-10"/>', avg: '<path d="M4 19h16"/><path d="M7 15v-4M12 15V7M17 15v-6"/>',
+  open: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4"/>', closed: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>' };
+function kpiCard(k, label, en, val, color, click) {
+  return `<div class="kpi${click ? " click" : ""}" style="--c:${color}" ${click ? `data-f='${click}'` : ""}><div class="h"><span>${label}</span><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">${ICON[k]}</svg></span></div><div class="v">${val}</div><div class="e">${en}</div></div>`;
+}
+function render() {
+  const d = filtered();
+  const cnt = k => d.filter(r => r.level === k).length;
+  const sc = d.filter(r => !isNaN(r.score));
+  const avg = sc.length ? (sc.reduce((a, r) => a + r.score, 0) / sc.length) : 0;
+  const closed = d.filter(r => isClosed(r.status)).length;
+  const hasStatus = RAW.some(r => r.status);
+  $("kpis").innerHTML = [
+    kpiCard("total", "إجمالي المخاطر", "Total Risks", d.length, "#1F3864"),
+    kpiCard("crit", "المخاطر الحرجة", "Critical Risks", cnt("crit"), LVK.crit.color, '{"lvl":"crit"}'),
+    kpiCard("high", "المخاطر المرتفعة", "High Risks", cnt("high"), "#D9731A", '{"lvl":"high"}'),
+    kpiCard("mod", "المخاطر المتوسطة", "Moderate Risks", cnt("mod"), "#B8901A", '{"lvl":"mod"}'),
+    kpiCard("low", "المخاطر المنخفضة", "Low Risks", cnt("low"), LVK.low.color, '{"lvl":"low"}'),
+    kpiCard("avg", "متوسط درجة الخطر", "Average Risk Score", d.length ? avg.toFixed(1) : "—", "#1F6FB2"),
+    hasStatus ? kpiCard("open", "المخاطر غير المغلقة", "Open Risks", d.length - closed, "#0E7490") : "",
+    hasStatus ? kpiCard("closed", "المخاطر المغلقة", "Closed Risks", closed, "#6B7280") : ""].join("");
+  document.querySelectorAll(".kpi.click").forEach(el => el.onclick = () => { const o = JSON.parse(el.dataset.f); F.lvl = F.lvl === o.lvl ? "" : o.lvl; $("fLvl").value = F.lvl; render(); });
+  renderPie(filtered("lvl")); renderBar(filtered("cat")); renderHM(); renderScatter(d); renderTable(d); renderChips(); renderValidation();
+}
+let pie, bar, sct;
+function renderPie(d) {
+  pie = pie || echarts.init($("pie")); const tot = d.length; const sm = $("pie").clientWidth < 480;
+  pie.setOption({ tooltip: { trigger: "item", formatter: p => `${p.name}<br><b>${p.value}</b> خطر — ${Math.round(p.percent * 10) / 10}%` },
+    legend: { bottom: 0, textStyle: { fontFamily: "IBM Plex Sans Arabic" } },
+    series: [{ type: "pie", radius: sm ? ["30%", "55%"] : ["38%", "70%"], center: ["50%", "45%"], avoidLabelOverlap: true, itemStyle: { borderColor: "#fff", borderWidth: 3, borderRadius: 6 },
+      label: { formatter: p => p.value ? `${p.value} خطر\n${Math.round(p.percent * 10) / 10}%` : "", fontWeight: 700, fontSize: sm ? 11 : 13, lineHeight: sm ? 15 : 18, overflow: "none", fontFamily: "IBM Plex Sans Arabic" },
+      data: LV.map(l => ({ name: l.ar + " (" + l.en + ")", value: d.filter(r => r.level === l.k).length, itemStyle: { color: l.color, opacity: !F.lvl || F.lvl === l.k ? 1 : .3 }, k: l.k })) }],
+    graphic: [{ type: "text", left: "center", top: "39%", style: { text: tot + "\nخطر", textAlign: "center", fill: "#14284B", fontSize: 16, fontWeight: 700, fontFamily: "IBM Plex Sans Arabic" } }] }, true);
+  pie.off("click"); pie.on("click", p => { F.lvl = F.lvl === p.data.k ? "" : p.data.k; $("fLvl").value = F.lvl; render(); });
+}
+function renderBar(d) {
+  bar = bar || echarts.init($("bar"));
+  const cats = uniq(RAW.map(r => r.cat));
+  bar.setOption({ grid: { left: 40, right: 20, top: 30, bottom: 40 }, tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+    xAxis: { type: "category", data: cats, axisLabel: { fontFamily: "IBM Plex Sans Arabic", fontSize: 12 } },
+    yAxis: { type: "value", minInterval: 1, name: "عدد المخاطر", nameTextStyle: { fontFamily: "IBM Plex Sans Arabic" } },
+    series: [{ type: "bar", barMaxWidth: 56, data: cats.map(c => ({ value: d.filter(r => r.cat === c).length, itemStyle: { color: !F.cat || F.cat === c ? "#1F6FB2" : "#BFD3E8", borderRadius: [8, 8, 0, 0] } })),
+      label: { show: true, position: "top", fontWeight: 700, fontSize: 14 } }] }, true);
+  bar.off("click"); bar.on("click", p => { F.cat = F.cat === p.name ? "" : p.name; $("fCat").value = F.cat; render(); });
+}
+function renderHM() {
+  const d = filtered("cell"); const g = [];
+  for (let i = 5; i >= 1; i--) {
+    g.push(`<div class="ax">${i}<br><span style="font-weight:500;font-size:10px">${["", "ضئيل", "بسيط", "متوسط", "كبير", "كارثي"][i]}</span></div>`);
+    for (let p = 1; p <= 5; p++) {
+      const s = p * i, n = d.filter(r => r.p === p && r.i === i).length, c = LVK[levelFromScore(s)].color, sel = F.cell && F.cell[0] === p && F.cell[1] === i;
+      g.push(`<div class="cell${n ? "" : " zero"}${sel ? " sel" : ""}" style="background:${c}${n ? "" : "B3"}" data-p="${p}" data-i="${i}" title="الاحتمالية ${p} × التأثير ${i} = ${s} | ${n} خطر"><span class="n">${n}</span><span class="s">الدرجة ${s}</span></div>`);
+    }
+  }
+  g.push(`<div></div>`); for (let p = 1; p <= 5; p++) g.push(`<div class="ax">${p}<br><span style="font-weight:500;font-size:10px">${["", "نادر", "غير مرجح", "محتمل", "مرجح", "شبه مؤكد"][p]}</span></div>`);
+  $("hm").innerHTML = g.join("");
+  $("hm").querySelectorAll(".cell").forEach(el => el.onclick = () => { const p = +el.dataset.p, i = +el.dataset.i; F.cell = F.cell && F.cell[0] === p && F.cell[1] === i ? null : [p, i]; render(); document.querySelector(".tbl-wrap").scrollIntoView({ behavior: "smooth", block: "center" }); });
+}
+function renderScatter(d) {
+  sct = sct || echarts.init($("sc"));
+  const byCell = {}; d.forEach(r => { const k = r.p + "|" + r.i; (byCell[k] = byCell[k] || []).push(r); });
+  const series = LV.map(l => ({ name: l.ar + " (" + l.en + ")", type: "scatter", symbolSize: 20, itemStyle: { color: l.color, borderColor: "#fff", borderWidth: 1.5, opacity: .95 },
+    data: d.filter(r => r.level === l.k && !isNaN(r.score)).map(r => { const grp = byCell[r.p + "|" + r.i], k = grp.indexOf(r), n = grp.length, off = n > 1 ? (k - (n - 1) / 2) * 0.18 : 0;
+      return { value: [r.p + off, r.i + (n > 2 ? ((k % 2) ? .1 : -.1) : 0)], r }; }),
+    label: { show: true, formatter: p => p.data.r.id, position: "top", fontSize: 10, color: "#334155" } }));
+  sct.setOption({ grid: { left: 24, right: 56, top: 20, bottom: 74 }, legend: { bottom: 0, textStyle: { fontFamily: "IBM Plex Sans Arabic" } },
+    tooltip: { formatter: p => { const r = p.data.r; return `<b>${esc(r.id)} — ${esc(r.title)}</b><br>الاحتمالية: ${r.p} | التأثير: ${r.i}<br>درجة الخطر: <b>${r.score}</b> | التصنيف: <b>${LVK[r.level].ar} (${LVK[r.level].en})</b><br>الفئة: ${esc(r.cat)} | الحالة: ${esc(r.status)}`; } },
+    xAxis: { name: "الاحتمالية (Probability) — تزداد من اليمين إلى اليسار", nameLocation: "middle", nameGap: 30, inverse: true, min: 0.5, max: 5.5, interval: 0.5, axisLabel: { formatter: v => Number.isInteger(v) ? v : "", fontWeight: 700 }, axisTick: { show: false }, splitLine: { show: false }, nameTextStyle: { fontFamily: "IBM Plex Sans Arabic" } },
+    yAxis: { name: "التأثير (Impact)", nameLocation: "middle", nameGap: 30, position: "right", min: 0.5, max: 5.5, interval: 0.5, axisLabel: { formatter: v => Number.isInteger(v) ? v : "", fontWeight: 700 }, axisTick: { show: false }, splitLine: { show: false }, nameTextStyle: { fontFamily: "IBM Plex Sans Arabic" } },
+    series: series.concat([{ type: "scatter", silent: true, data: [], markArea: { silent: true, data: zones() } }]) }, true);
+  sct.off("click"); sct.on("click", p => p.data && p.data.r && openDrawer(p.data.r));
+}
+function zones() { const z = []; for (let p = 1; p <= 5; p++) for (let i = 1; i <= 5; i++) z.push([{ xAxis: p - .5, yAxis: i - .5, itemStyle: { color: LVK[levelFromScore(p * i)].color, opacity: .16, borderColor: '#fff', borderWidth: 2 } }, { xAxis: p + .5, yAxis: i + .5 }]); return z; }
+const TCOLS = [["id", "الرقم"], ["title", "عنوان الخطر"], ["cat", "الفئة"], ["p", "P"], ["i", "I"], ["score", "الدرجة"], ["level", "التصنيف"], ["owner", "مالك الخطر"], ["status", "الحالة"], ["date", "تاريخ الرصد"]];
+const LORD = { crit: 4, high: 3, mod: 2, low: 1 };
+function renderTable(d) {
+  $("thead").innerHTML = TCOLS.map(([k, t]) => `<th data-k="${k}" class="${sortK === k ? "on" : ""}">${t} <span class="ar">${sortK === k ? (sortDir < 0 ? "▼" : "▲") : "↕"}</span></th>`).join("");
+  $("thead").querySelectorAll("th").forEach(th => th.onclick = () => { const k = th.dataset.k; sortDir = sortK === k ? -sortDir : (k === "score" || k === "level" ? -1 : 1); sortK = k; render(); });
+  const v = r => sortK === "level" ? LORD[r.level] || 0 : sortK === "id" ? parseInt(r.id.replace(/\D/g, "")) || 0 : r[sortK];
+  const rows = [...d].sort((a, b) => { const x = v(a), y = v(b); return (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "ar")) * sortDir || a.id.localeCompare(b.id); });
+  window.__VIEW = rows;
+  $("tbody").innerHTML = rows.length ? rows.map(r => { const l = LVK[r.level] || {}; return `<tr data-id="${esc(r.id)}"><td><b>${esc(r.id)}</b></td><td>${esc(r.title)}</td><td>${esc(r.cat)}</td><td>${r.p || ""}</td><td>${r.i || ""}</td>
+    <td><span class="score" style="background:${l.color || "#eee"}33">${isNaN(r.score) ? "—" : r.score}</span></td><td><span class="badge ${l.cls || ""}">${l.ar ? l.ar + " (" + l.en + ")" : esc(r.levelTxt)}</span></td>
+    <td>${esc(r.owner)}</td><td><span class="st${isClosed(r.status) ? " closed" : ""}">${esc(r.status)}</span></td><td style="white-space:nowrap">${esc(r.date)}</td></tr>`; }).join("")
+    : `<tr><td colspan="${TCOLS.length}" class="empty">لا توجد مخاطر مطابقة للفلاتر الحالية.</td></tr>`;
+  $("tbody").querySelectorAll("tr[data-id]").forEach(tr => tr.onclick = () => openDrawer(RAW.find(r => r.id === tr.dataset.id)));
+  $("tblSub").textContent = `يعرض ${rows.length} من أصل ${RAW.length} خطرًا — اضغط على عنوان العمود للفرز، وعلى الصف لعرض التفاصيل`;
+}
+function renderChips() {
+  const c = []; const add = (t, fn) => c.push({ t, fn });
+  if (F.cat) add("الفئة: " + F.cat, () => F.cat = ""); if (F.lvl) add("المستوى: " + LVK[F.lvl].ar, () => F.lvl = ""); if (F.st) add("الحالة: " + F.st, () => F.st = "");
+  if (F.own) add("المالك: " + F.own, () => F.own = ""); if (F.q) add("بحث: " + F.q, () => F.q = ""); if (F.cell) add(`خلية المصفوفة: P${F.cell[0]} × I${F.cell[1]}`, () => F.cell = null);
+  $("chips").innerHTML = c.map((x, k) => `<span class="chip">${esc(x.t)} <button data-k="${k}" aria-label="إزالة">×</button></span>`).join("");
+  $("chips").querySelectorAll("button").forEach(b => b.onclick = () => { c[+b.dataset.k].fn(); syncInputs(); render(); });
+}
+function renderValidation() {
+  if (!RAW.length) { $("val").innerHTML = "<li class='bad'>لا توجد بيانات محمّلة.</li>"; return; }
+  const ids = RAW.map(r => r.id), dup = ids.filter((x, k) => ids.indexOf(x) !== k);
+  const badPI = RAW.filter(r => !(r.p >= 1 && r.p <= 5 && r.i >= 1 && r.i <= 5));
+  const badScore = RAW.filter(r => !isNaN(r.srcScore) && r.srcScore !== r.score);
+  const badLvl = RAW.filter(r => r.calcLevel && levelKey(r.levelTxt) && levelKey(r.levelTxt) !== r.calcLevel);
+  const L = (ok, t) => `<li class="${ok ? "ok" : "bad"}">${ok ? "✔" : "✖"} ${t}</li>`;
+  $("val").innerHTML = [
+    L(true, `مصدر البيانات: ${esc(META.source)} — عدد المخاطر المقروءة: <b>${RAW.length}</b> — بصمة البيانات: <code>${META.hash}</code>`),
+    META.directErr ? `<li class='info'>ℹ تعذّر الجلب المباشر من Google (${esc(META.directErr)})، فاستُخدمت النسخة المتزامنة آليًا من الرابط نفسه.</li>` : `<li class='ok'>✔ الجلب المباشر من رابط Google Sheets المنشور يعمل (CORS مسموح).</li>`,
+    L(!dup.length, dup.length ? "أرقام مخاطر مكررة: " + esc(uniq(dup).join("، ")) : "لا توجد أرقام مخاطر مكررة"),
+    L(!badPI.length, badPI.length ? "قيم احتمالية/تأثير خارج 1–5: " + esc(badPI.map(r => r.id).join("، ")) : "جميع قيم الاحتمالية والتأثير صحيحة (1–5)"),
+    L(!badScore.length, badScore.length ? "درجة المصدر لا تساوي P×I في: " + esc(badScore.map(r => r.id).join("، ")) : "درجة الخطر في المصدر = الاحتمالية × التأثير لجميع المخاطر (أُعيد احتسابها في اللوحة)"),
+    L(!badLvl.length, badLvl.length ? "تصنيف المصدر يخالف الحدود المعتمدة في: " + esc(badLvl.map(r => r.id).join("، ")) : "تصنيف كل خطر مطابق للحدود: منخفض 1–4، متوسط 5–9، مرتفع 10–16، حرج 17–25")].join("");
+}
+function openDrawer(r) {
+  if (!r) return; const l = LVK[r.level] || {};
+  $("dId").textContent = r.id + " · " + r.cat; $("dTitle").textContent = r.title;
+  const blk = (t, v) => v ? `<div class="blk"><h5>${t}</h5><p>${esc(v)}</p></div>` : "";
+  $("dBody").innerHTML = `<div class="kv"><b>الاحتمالية × التأثير</b><span>${r.p} × ${r.i} = <b>${r.score}</b></span><b>التصنيف</b><span><span class="badge ${l.cls}">${l.ar} (${l.en})</span></span>
+    <b>مالك الخطر</b><span>${esc(r.owner)}</span><b>الحالة</b><span>${esc(r.status)}</span><b>تاريخ الرصد</b><span>${esc(r.date)}</span>
+    ${r.review ? `<b>المراجعة القادمة</b><span>${esc(r.review)}</span>` : ""}${r.prio ? `<b>أولوية المعالجة</b><span>${esc(r.prio)}</span>` : ""}${r.strat ? `<b>استراتيجية الاستجابة</b><span>${esc(r.strat)}</span>` : ""}</div>
+    ${blk("وصف الخطر (السبب ← الحدث ← الأثر)", r.desc)}${blk("مبرر التقييم", r.why)}${blk("الضوابط الحالية", r.ctrl)}${blk("خطة الاستجابة والإجراءات الوقائية", r.plan)}`;
+  $("drawer").classList.add("on"); $("dBg").classList.add("on"); $("drawer").setAttribute("aria-hidden", "false");
+}
+function closeDrawer() { $("drawer").classList.remove("on"); $("dBg").classList.remove("on"); $("drawer").setAttribute("aria-hidden", "true"); }
+function exportRows() {
+  return (window.__VIEW || []).map(r => ({ "رقم الخطر": r.id, "عنوان الخطر": r.title, "وصف الخطر": r.desc, "الفئة": r.cat, "الاحتمالية": r.p, "التأثير": r.i, "درجة الخطر": r.score,
+    "التصنيف": LVK[r.level] ? LVK[r.level].ar + " (" + LVK[r.level].en + ")" : r.levelTxt, "مالك الخطر": r.owner, "الحالة": r.status, "تاريخ الرصد": r.date, "خطة الاستجابة": r.plan }));
+}
+function stamp() { const d = new Date(); return d.toISOString().slice(0, 16).replace(/[:T]/g, "-"); }
+function download(blob, name) { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
+$("csvBtn").onclick = () => { const csv = Papa.unparse(exportRows()); download(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }), "Risk_Register_Filtered_" + stamp() + ".csv"); };
+$("xlsxBtn").onclick = () => { const ws = XLSX.utils.json_to_sheet(exportRows()); ws["!views"] = [{ rightToLeft: true }]; const wb = XLSX.utils.book_new(); wb.Workbook = { Views: [{ RTL: true }] }; XLSX.utils.book_append_sheet(wb, ws, "Risk Register"); XLSX.writeFile(wb, "Risk_Register_Filtered_" + stamp() + ".xlsx"); };
+function syncInputs() { $("fCat").value = F.cat; $("fLvl").value = F.lvl; $("fSt").value = F.st; $("fOwn").value = F.own; $("fQ").value = F.q; }
+[["fCat", "cat"], ["fLvl", "lvl"], ["fSt", "st"], ["fOwn", "own"]].forEach(([id, k]) => $(id).onchange = e => { F[k] = e.target.value; render(); });
+$("fQ").oninput = e => { F.q = e.target.value; render(); };
+$("resetBtn").onclick = () => { Object.assign(F, { cat: "", lvl: "", st: "", own: "", q: "", cell: null }); syncInputs(); render(); };
+$("refreshBtn").onclick = () => load(true);
+$("autoChk").onchange = schedule;
+$("dClose").onclick = closeDrawer; $("dBg").onclick = closeDrawer; document.addEventListener("keydown", e => e.key === "Escape" && closeDrawer());
+document.addEventListener("visibilitychange", () => { if (!document.hidden && META.lastOk && Date.now() - META.lastOk > AUTO_MS) load(false); });
+let rz; window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { [pie, bar, sct].forEach(c => c && c.resize()); if (RAW.length) render(); }, 150); });
+$("kpis").innerHTML = Array.from({ length: 8 }, () => '<div class="kpi"><div class="h sk">تحميل</div><div class="v sk">00</div></div>').join("");
+load(false);
+</script>
+</body>
+</html>
